@@ -1,6 +1,8 @@
 export default {
   testEnvironment: "jsdom",
-  transform: {},
+  transform: {
+    "^.+\\.[jt]sx?$": "babel-jest"
+  },
   roots: ["<rootDir>/tests"],
   moduleFileExtensions: ["js", "jsx"],
   collectCoverage: true,
@@ -18,4 +20,4 @@ export default {
     }
   },
   setupFilesAfterEnv: ["@testing-library/jest-dom"]
-}
+};
