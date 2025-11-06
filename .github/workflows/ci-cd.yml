@@ -1,0 +1,243 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - "feature/*"
+      - "developer"
+  pull_request:
+    branches:
+      - "developer"
+      - "main"
+
+jobs:
+  # ============================================================
+  # 1️⃣ BUILD STAGE
+  # ============================================================
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ✅ Conditional install to avoid errors if folders are missing (safe first push)
+      - name: Install client dependencies
+        run: |
+          if [ -d "client" ]; then
+            cd client
+            npm ci
+          else
+            echo "⚠️ No client folder found, skipping client install."
+          fi
+
+      - name: Install server dependencies
+        run: |
+          if [ -d "server" ]; then
+            cd server
+            npm ci
+          else
+            echo "⚠️ No server folder found, skipping server install."
+          fi
+
+  # ============================================================
+  # 2️⃣ TEST STAGE (Unit + Integration + System)
+  # ============================================================
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ✅ Install dependencies safely
+      - name: Install all dependencies
+        run: |
+          if [ -d "client" ]; then cd client && npm ci && cd ..; fi
+          if [ -d "server" ]; then cd server && npm ci && cd ..; fi
+
+      # ✅ Run Backend Tests
+      - name: Run Backend Tests (Jest)
+        run: |
+          if [ -d "server/tests" ]; then
+            cd server
+            npm test -- --coverage --coverageReporters=text-summary
+          else
+            echo "⚠️ No server tests found, skipping backend test stage."
+          fi
+
+      # ✅ Run Frontend Tests
+      - name: Run Frontend Tests (Jest)
+        run: |
+          if [ -d "client/tests" ]; then
+            cd client
+            npm test -- --coverage --coverageReporters=text-summary
+          else
+            echo "⚠️ No client tests found, skipping frontend test stage."
+          fi
+
+      # ✅ Save test coverage results as artifacts
+      - name: Save Test Results
+        if: always()
+        run: |
+          mkdir -p artifacts
+          if [ -d "client/coverage" ]; then cp -r client/coverage artifacts/client-coverage; fi
+          if [ -d "server/coverage" ]; then cp -r server/coverage artifacts/server-coverage; fi
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/
+
+  # ============================================================
+  # 3️⃣ COVERAGE STAGE
+  # ============================================================
+  coverage:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ✅ Generate HTML coverage report for both client and server
+      - name: Generate Coverage Reports
+        run: |
+          if [ -d "server" ]; then
+            cd server
+            npm test -- --coverage --coverageReporters=html
+            cd ..
+          fi
+          if [ -d "client" ]; then
+            cd client
+            npm test -- --coverage --coverageReporters=html
+            cd ..
+          fi
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            client/coverage
+            server/coverage
+
+  # ============================================================
+  # 4️⃣ LINT (Static Analysis)
+  # ============================================================
+  lint:
+    runs-on: ubuntu-latest
+    needs: coverage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run ESLint on Client
+        run: |
+          if [ -d "client" ]; then
+            cd client
+            npx eslint . -f json -o ../client-lint-report.json || true
+            cd ..
+          else
+            echo "⚠️ No client folder, skipping lint."
+          fi
+
+      - name: Run ESLint on Server
+        run: |
+          if [ -d "server" ]; then
+            cd server
+            npx eslint . -f json -o ../server-lint-report.json || true
+            cd ..
+          else
+            echo "⚠️ No server folder, skipping lint."
+          fi
+
+      - name: Upload Lint Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            client-lint-report.json
+            server-lint-report.json
+
+  # ============================================================
+  # 5️⃣ SECURITY SCAN
+  # ============================================================
+  security:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run npm audit (client)
+        run: |
+          if [ -d "client" ]; then
+            cd client
+            npm audit --json > ../client-security.json || true
+            cd ..
+          else
+            echo "⚠️ No client folder, skipping security audit."
+          fi
+
+      - name: Run npm audit (server)
+        run: |
+          if [ -d "server" ]; then
+            cd server
+            npm audit --json > ../server-security.json || true
+            cd ..
+          else
+            echo "⚠️ No server folder, skipping security audit."
+          fi
+
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            client-security.json
+            server-security.json
+
+  # ============================================================
+  # 6️⃣ DEPLOYMENT ARTIFACT (ZIP)
+  # ============================================================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: security
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create deployment folder
+        run: |
+          mkdir -p deploy_artifact
+          if [ -d "client" ]; then cp -r client deploy_artifact/client; fi
+          if [ -d "server" ]; then cp -r server deploy_artifact/server; fi
+          cp README.md deploy_artifact/ || true
+          if [ -d "client/coverage" ]; then cp -r client/coverage deploy_artifact/client-coverage; fi
+          if [ -d "server/coverage" ]; then cp -r server/coverage deploy_artifact/server-coverage; fi
+          cp client-lint-report.json deploy_artifact/ || true
+          cp server-lint-report.json deploy_artifact/ || true
+          cp client-security.json deploy_artifact/ || true
+          cp server-security.json deploy_artifact/ || true
+
+      - name: Create zip artifact
+        run: zip -r deployment_artifact.zip deploy_artifact/
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment_artifact
+          path: deployment_artifact.zip
