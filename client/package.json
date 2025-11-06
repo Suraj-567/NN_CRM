@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . -f json -o client-lint-report.json",
     "preview": "vite preview",
     "test": "jest --coverage"
   },
