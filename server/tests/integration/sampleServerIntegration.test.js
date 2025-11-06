@@ -1,5 +1,5 @@
-import request from "supertest"
-import express from "express"
+const request = require("supertest");
+const express = require("express");
 
 const app = express()
 app.get("/ping", (req, res) => res.json({ msg: "pong" }))
