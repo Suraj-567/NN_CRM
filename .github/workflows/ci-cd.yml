@@ -113,11 +113,13 @@ jobs:
         run: |
           if [ -d "server" ]; then
             cd server
+            npm install
             npm test -- --coverage --coverageReporters=html
             cd ..
           fi
           if [ -d "client" ]; then
             cd client
+            npm install
             npm test -- --coverage --coverageReporters=html
             cd ..
           fi
