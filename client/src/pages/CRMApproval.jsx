@@ -24,6 +24,7 @@ export default function CRMApproval() {
       fetchPendingCompanies();
       alert(`Company ${status} successfully`);
     } catch (err) {
+      console.error("Error updating company status:", err);
       alert("Error updating company status");
     }
   };

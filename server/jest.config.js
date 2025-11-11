@@ -1,6 +1,8 @@
 export default {
   testEnvironment: "node",
-  transform: {},
+  transform: {
+     "^.+\\.jsx?$": "babel-jest",
+  },
   roots: ["<rootDir>/tests"],
   collectCoverage: true,
   collectCoverageFrom: [
@@ -19,4 +21,4 @@ export default {
       statements: 75
     }
   }
-}
+};

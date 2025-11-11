@@ -2,7 +2,7 @@
 import Ticket from "../models/Ticket.js";
 import Customer from "../models/Customer.js";
 import Employee from "../models/Employee.js";
-import User from "../models/User.js";
+
 import mongoose from "mongoose";
 
 /**

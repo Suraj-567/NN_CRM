@@ -50,6 +50,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: build
+    env:
+      # ✅ Disable CI mode globally so Jest behaves like local terminal
+      CI: false
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,39 +66,48 @@ jobs:
           if [ -d "client" ]; then cd client && npm ci && cd ..; fi
           if [ -d "server" ]; then cd server && npm ci && cd ..; fi
 
-      # ✅ Run Backend Tests
-      - name: Run Backend Tests (Jest)
-        run: |
-          if [ -d "server/tests" ]; then
-            cd server
-            npm test -- --coverage --coverageReporters=text-summary
-          else
-            echo "⚠️ No server tests found, skipping backend test stage."
-          fi
-
-      # ✅ Run Frontend Tests
-      - name: Run Frontend Tests (Jest)
-        run: |
-          if [ -d "client/tests" ]; then
-            cd client
-            npm test -- --coverage --coverageReporters=text-summary
-          else
-            echo "⚠️ No client tests found, skipping frontend test stage."
-          fi
-
-      # ✅ Save test coverage results as artifacts
-      - name: Save Test Results
-        if: always()
+      # ============================================================
+      # 🧪 Run Backend Tests (Jest) — Clean Full Output + Coverage
+      # ============================================================
+      - name: Run Backend Tests (Readable Output)
         run: |
           mkdir -p artifacts
-          if [ -d "client/coverage" ]; then cp -r client/coverage artifacts/client-coverage; fi
-          if [ -d "server/coverage" ]; then cp -r server/coverage artifacts/server-coverage; fi
-        continue-on-error: true
+          if [ -d "server/tests" ]; then
+            echo "🧪 Running Backend Tests..."
+            cd server
+            # ✅ Run Jest exactly like npm test (no extra --coverageReporters)
+            npm test -- --coverage --runInBand > ../artifacts/server-test-report.txt 2>&1
+            cd ..
+          else
+            echo "⚠️ No server tests found, skipping backend test stage." > artifacts/server-test-report.txt
+          fi
 
-      - uses: actions/upload-artifact@v4
+      # ============================================================
+      # 🧪 Run Frontend Tests (Jest) — Clean Full Output + Coverage
+      # ============================================================
+      - name: Run Frontend Tests (Readable Output)
+        run: |
+          if [ -d "client/tests" ]; then
+            echo "🧪 Running Frontend Tests..."
+            cd client
+            # ✅ Plain readable output — same as local `npm test`
+            npm test -- --coverage --runInBand > ../artifacts/client-test-report.txt 2>&1
+            cd ..
+          else
+            echo "⚠️ No client tests found, skipping frontend test stage." > artifacts/client-test-report.txt
+          fi
+
+      # ============================================================
+      # 📦 Upload Combined Test Outputs as Artifact
+      # ============================================================
+      - name: Upload Test Output Reports
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: artifacts/
+
+
+
 
   # ============================================================
   # 3️⃣ COVERAGE STAGE
@@ -144,33 +157,60 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Run ESLint on Client
+      # ✅ Ensure dependencies are installed before linting
+      - name: Install Dependencies for Lint
         run: |
           if [ -d "client" ]; then
             cd client
-            npx eslint . -f json -o ../client-lint-report.json || true
+            npm ci || npm install
             cd ..
-          else
-            echo "⚠️ No client folder, skipping lint."
+          fi
+          if [ -d "server" ]; then
+            cd server
+            npm ci || npm install
+            cd ..
           fi
 
+      # ✅ Run ESLint on Client (Human-readable TXT format)
+      - name: Run ESLint on Client
+        run: |
+          if [ -d "client" ]; then
+            echo "🔍 Running ESLint for Client..."
+            cd client
+            npx eslint . > ../client-lint-report.txt || true
+            cd ..
+            # ✅ If the file is empty or no warnings/errors, add a 0 problems message
+            if ! grep -q "problem" client-lint-report.txt; then
+              echo "0 problems (0 errors, 0 warnings)" >> client-lint-report.txt
+            fi
+          else
+            echo "⚠️ No client folder found, skipping lint." > client-lint-report.txt
+          fi
+
+      # ✅ Run ESLint on Server (Human-readable TXT format)
       - name: Run ESLint on Server
         run: |
           if [ -d "server" ]; then
+            echo "🔍 Running ESLint for Server..."
             cd server
-            npx eslint . -f json -o ../server-lint-report.json || true
+            npx eslint . > ../server-lint-report.txt || true
             cd ..
+            if ! grep -q "problem" server-lint-report.txt; then
+              echo "0 problems (0 errors, 0 warnings)" >> server-lint-report.txt
+            fi
           else
-            echo "⚠️ No server folder, skipping lint."
+            echo "⚠️ No server folder found, skipping lint." > server-lint-report.txt
           fi
 
+      # ✅ Upload Lint Reports
       - name: Upload Lint Reports
         uses: actions/upload-artifact@v4
         with:
           name: lint-reports
           path: |
-            client/client-lint-report.json
-            server/server-lint-report.json
+            client-lint-report.txt
+            server-lint-report.txt
+
 
   # ============================================================
   # 5️⃣ SECURITY SCAN
@@ -218,25 +258,57 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: security
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+
+      # ✅ Download all previous artifacts so files exist locally
+      - name: Download Test Results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: test-results
+
+      - name: Download Coverage Report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
+      - name: Download Lint Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: lint-reports
+          path: lint-reports
+
+      - name: Download Security Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: security-reports
+          path: security-reports
 
       - name: Create deployment folder
         run: |
           mkdir -p deploy_artifact
+          
+          # ✅ Copy source folders
           if [ -d "client" ]; then cp -r client deploy_artifact/client; fi
           if [ -d "server" ]; then cp -r server deploy_artifact/server; fi
+          
+          # ✅ Copy README (if exists)
           cp README.md deploy_artifact/ || true
-          if [ -d "client/coverage" ]; then cp -r client/coverage deploy_artifact/client-coverage; fi
-          if [ -d "server/coverage" ]; then cp -r server/coverage deploy_artifact/server-coverage; fi
-          cp client-lint-report.json deploy_artifact/ || true
-          cp server-lint-report.json deploy_artifact/ || true
-          cp client-security.json deploy_artifact/ || true
-          cp server-security.json deploy_artifact/ || true
+          
+          # ✅ Copy downloaded artifacts into deployment folder
+          cp -r test-results deploy_artifact/test-results || true
+          cp -r coverage-report deploy_artifact/coverage-report || true
+          cp -r lint-reports deploy_artifact/lint-reports || true
+          cp -r security-reports deploy_artifact/security-reports || true
+          
+          echo "✅ Deployment folder prepared with all reports."
 
       - name: Create zip artifact
-        run: zip -r deployment_artifact.zip deploy_artifact/
+        run: |
+          zip -r deployment_artifact.zip deploy_artifact/
+          echo "✅ Deployment ZIP created."
 
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v4

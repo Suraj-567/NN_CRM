@@ -1,6 +1,6 @@
 import Company from "../models/Company.js";
 import User from "../models/User.js";
-import bcrypt from "bcryptjs";
+
 
 export const getStats = async (req, res) => {
   const totalCompanies = await Company.countDocuments();
