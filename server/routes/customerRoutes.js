@@ -7,6 +7,8 @@ import {
   updateCustomer,
   softDeleteCustomer,
   restoreCustomer,
+  getAssignedCustomers,
+  addEngagement
 } from "../controllers/customerController.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 
@@ -15,9 +17,12 @@ router.use(verifyToken);
 
 router.post("/", createCustomer);
 router.get("/", listCustomers);
+router.get("/assigned", getAssignedCustomers);
+router.post("/:id/engagement", addEngagement);
 router.get("/:id", getCustomer);
 router.put("/:id", updateCustomer);
 router.delete("/:id", softDeleteCustomer);
-router.put("/:id/restore", restoreCustomer); // 🔥 new route
+router.put("/:id/restore", restoreCustomer);
+
 
 export default router;

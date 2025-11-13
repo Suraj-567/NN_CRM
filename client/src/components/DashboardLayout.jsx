@@ -19,10 +19,10 @@ export default function DashboardLayout() {
   };
 
   const menuItems = [
-    { name: "Employees", icon: <FiUsers />, path: "/manager/dashboard/employees" },
-    { name: "Customers", icon: <FiUserPlus />, path: "/manager/dashboard/customers" },
-    { name: "Tickets", icon: <FiFileText />, path: "/manager/dashboard/tickets" },
-    { name: "Customer Tickets", icon: <FiFileText />, path: "/manager/dashboard/customer-tickets" },
+    { name: "Employees", icon: <FiUsers />, path: "/manager/employees" },
+    { name: "Customers", icon: <FiUserPlus />, path: "/manager/customers" },
+    { name: "Tickets", icon: <FiFileText />, path: "/manager/tickets" },
+    { name: "Customer Tickets", icon: <FiFileText />, path: "/manager/customer-tickets" },
   ];
 
   return (

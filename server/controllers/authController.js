@@ -1,5 +1,6 @@
 // server/controllers/authController.js
 import User from "../models/User.js";
+import Employee from "../models/Employee.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
@@ -9,9 +10,8 @@ export const registerUser = async (req, res) => {
     const { name, email, password, role, companyId } = req.body;
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: "Email already in use" });
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, password: hashedPassword, role, companyId });
+
+    const user = await User.create({ name, email, password, role, companyId });
     res.status(201).json({ message: "User registered successfully", user });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -82,5 +82,42 @@ export const loginUser = async (req, res) => {
   } catch (err) {
     console.error("❌ Error during user login:", err);
     res.status(500).json({ error: err.message });
+  }
+};
+
+export const loginEmployee = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const employee = await Employee.findOne({ email });
+    console.log("Employee:", employee); // debug
+
+    if (!employee)
+      return res.status(404).json({ message: "Employee not found" });
+
+    console.log("Stored Password:", employee.password);
+    console.log("Entered Password:", password);
+
+    const isMatch = await bcrypt.compare(password, employee.password);
+    console.log("Password Match:", isMatch);
+
+    if (!isMatch)
+      return res.status(401).json({ message: "Invalid credentials" });
+
+    const token = jwt.sign(
+      { id: employee._id, role: employee.role, companyId: employee.companyId },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      token,
+      role: employee.role,
+      name: employee.name,
+      companyId: employee.companyId,
+    });
+  } catch (err) {
+    console.error("Login Error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

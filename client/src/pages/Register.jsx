@@ -47,14 +47,19 @@ export default function CompanyRegister() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    companyName: "",
-    businessEmail: "",
-    managerName: "",
-    password: "",
-    industry: "",
-    address: "",
-    phone: "",
-  });
+  companyName: "",
+  businessEmail: "",
+  managerName: "",
+  password: "",
+  industry: "",
+  address: "",
+  phone: "",
+  smtpUser: "",
+  smtpPass: "",
+  smtpHost: "",
+  smtpPort: 587,
+});
+
 
   const [loading, setLoading] = useState(false);
 
@@ -173,6 +178,51 @@ export default function CompanyRegister() {
             onChange={handleChange}
             disabled={loading}
           />
+
+          <InputField
+  icon={Mail}
+  name="smtpUser"
+  type="email"
+  placeholder="SMTP Email (Used for Sending Emails)"
+  required={true}
+  value={formData.smtpUser}
+  onChange={handleChange}
+  disabled={loading}
+/>
+
+<InputField
+  icon={Lock}
+  name="smtpPass"
+  type="password"
+  placeholder="SMTP Password (App Password)"
+  required={true}
+  value={formData.smtpPass}
+  onChange={handleChange}
+  disabled={loading}
+/>
+
+<InputField
+  icon={Factory}
+  name="smtpHost"
+  type="text"
+  placeholder="SMTP Host (e.g. smtp.gmail.com)"
+  required={true}
+  value={formData.smtpHost}
+  onChange={handleChange}
+  disabled={loading}
+/>
+
+<InputField
+  icon={Phone}
+  name="smtpPort"
+  type="number"
+  placeholder="SMTP Port (465 or 587)"
+  required={true}
+  value={formData.smtpPort}
+  onChange={handleChange}
+  disabled={loading}
+/>
+
 
           {/* --- ENHANCEMENT: Full-width address field --- */}
           <div className="md:col-span-3">

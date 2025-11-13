@@ -2,7 +2,7 @@
 import Ticket from "../models/Ticket.js";
 import Customer from "../models/Customer.js";
 import Employee from "../models/Employee.js";
-
+import User from "../models/User.js";
 import mongoose from "mongoose";
 
 /**
@@ -31,7 +31,7 @@ export const createTicket = async (req, res) => {
   try {
     const companyId = req.user?.companyId;
     const userId = req.user?.id;
-    const userName = req.user?.name || "System";
+    const userName = req.user?.name || "Business Manager";
 
     const {
       customerId,
@@ -165,7 +165,7 @@ export const updateTicket = async (req, res) => {
   try {
     const companyId = req.user?.companyId;
     const userId = req.user?.id;
-    const userName = req.user?.name || "System";
+    const userName = req.user?.name || "Business Manager";
     const { id } = req.params;
     const updates = req.body;
 
@@ -301,5 +301,58 @@ export const getCustomerTickets = async (req, res) => {
   } catch (err) {
     console.error("❌ getCustomerTickets:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Get tickets assigned to the logged-in employee
+ */
+export const getAssignedTickets = async (req, res) => {
+  try {
+    const employeeId = req.user?.id;
+    if (!employeeId) return res.status(400).json({ message: "Employee ID missing" });
+
+    const tickets = await Ticket.find({ assignedTo: employeeId })
+      .populate("customerId", "name email phone")
+      .sort({ updatedAt: -1 });
+
+    res.json(tickets);
+  } catch (err) {
+    console.error("❌ getAssignedTickets:", err);
+    res.status(500).json({ message: "Failed to fetch assigned tickets" });
+  }
+};
+
+/**
+ * Update ticket status with audit entry
+ */
+export const updateTicketStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const employeeId = req.user?.id;
+    const employeeName = req.user?.name || "Employee";
+
+    const ticket = await Ticket.findById(id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    const oldStatus = ticket.status;
+    ticket.status = status;
+
+    ticket.audit.push({
+      action: "status_changed",
+      by: employeeId,
+      byName: employeeName,
+      note: `Status changed from ${oldStatus} to ${status}`,
+      diff: { status: { from: oldStatus, to: status } },
+      at: new Date(),
+    });
+
+    await ticket.save();
+
+    res.json({ message: "Status updated", ticket });
+  } catch (err) {
+    console.error("❌ updateTicketStatus:", err);
+    res.status(500).json({ message: "Failed to update ticket status" });
   }
 };

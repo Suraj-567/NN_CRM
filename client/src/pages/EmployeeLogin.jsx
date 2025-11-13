@@ -15,34 +15,33 @@ export default function EmployeeLogin() {
   // --- ENHANCEMENT: Added loading state
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true); // --- ENHANCEMENT
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      const { data } = await axios.post(
-        "http://localhost:5001/api/auth/admin",
-        { email, password }
-      );
+  try {
+    const { data } = await axios.post("http://localhost:5001/api/auth/employee", {
+      email,
+      password,
+    });
 
-      if (data.role === "Employee") {
-        localStorage.setItem("token", data.token);
-        // --- ENHANCEMENT: Use toast
-        toast.success("✅ Employee login successful!");
-        setTimeout(() => navigate("/employee/dashboard"), 1000); // redirect after success
-      } else {
-        // --- ENHANCEMENT: Use toast
-        toast.error("❌ Access denied: You are not an Employee.");
-        setLoading(false); // --- ENHANCEMENT
-      }
-    } catch (err) {
-      // --- ENHANCEMENT: Use toast
-      toast.error(
-        err.response?.data?.message || "❌ Login failed! Check credentials."
-      );
-      setLoading(false); // --- ENHANCEMENT
-    }
-  };
+    // ✅ Store token & role
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("role", data.role);
+    localStorage.setItem("name", data.name);
+    localStorage.setItem("companyId", data.companyId);
+
+    toast.success("✅ Employee login successful!");
+    navigate("/employee-layout/dashboard");
+
+  } catch (err) {
+    toast.error(err.response?.data?.message || "❌ Login failed!");
+  }
+  
+
+  setLoading(false);
+};
+
 
   // --- ENHANCEMENT: Removed custom toast useEffect
 

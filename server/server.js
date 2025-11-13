@@ -11,6 +11,8 @@ import employeeRoutes from "./routes/employeeRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js"; // <-- new
 import ticketRoutes from "./routes/ticketRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import taskRoutes from "./routes/taskRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -25,6 +27,9 @@ app.use("/api/employees", employeeRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/customers", customerRoutes); 
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/tasks", taskRoutes);
+
 
 app.get("/", (req, res) => res.send("CRM API is running..."));
 

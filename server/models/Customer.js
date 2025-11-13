@@ -39,6 +39,7 @@ const customerSchema = new mongoose.Schema(
     state: { type: String, enum: ["active", "deactive"], default: "active" },
     conversionDate: { type: Date, default: null },
     conversionSource: { type: String, default: null },
+    loyaltyPoints: { type: Number, default: 0 },
     engagementHistory: [engagementSchema],
     audit: [auditSchema],
     deletedAt: { type: Date, default: null },

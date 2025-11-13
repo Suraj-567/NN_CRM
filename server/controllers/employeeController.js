@@ -1,7 +1,10 @@
+import mongoose from "mongoose";
+
 import Employee from "../models/Employee.js";
 import User from "../models/User.js";
 import Customer from "../models/Customer.js"; // IMPORT Customer model
 import bcrypt from "bcryptjs";
+import Ticket from "../models/Ticket.js";
 
 // ➕ Add new Employee (Business Manager only)
 export const addEmployee = async (req, res) => {
@@ -16,43 +19,27 @@ export const addEmployee = async (req, res) => {
       return res.status(400).json({ message: "Company ID missing in token" });
     }
 
-    // Check existing employee or user
+    // ✅ Check only Employee model now
     const existingEmp = await Employee.findOne({ email });
-    const existingUser = await User.findOne({ email });
-    if (existingEmp || existingUser) {
+    if (existingEmp) {
       return res.status(400).json({ message: "Employee already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create Employee
+    // ✅ Create employee (password auto-hashes due to pre-save middleware)
     const newEmployee = new Employee({
       name,
       email,
-      password: hashedPassword,
+      password,
       department,
       companyId,
       role: "Employee",
-      ticketsHandled: 0,
       status: "Active",
     });
+
     await newEmployee.save();
 
-    // Create corresponding User
-    const newUser = new User({
-      name,
-      email,
-      password: hashedPassword,
-      department,
-      companyId,
-      role: "Employee",
-      ticketsHandled: 0,
-      status: "Active",
-    });
-    await newUser.save();
-
     res.status(201).json({
-      message: "Employee added successfully",
+      message: "✅ Employee added successfully",
       employee: newEmployee,
     });
   } catch (err) {
@@ -60,6 +47,7 @@ export const addEmployee = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // 📋 Get all employees
 export const getEmployees = async (req, res) => {
@@ -143,36 +131,56 @@ export const toggleEmployeeStatus = async (req, res) => {
       await user.save();
     }
 
-    // --- NEW LOGIC: Cascade Update for Customers ---
-    if (newStatus === "Inactive") {
-      // 1. Find all customers currently assigned to this employee
-      const affectedCustomers = await Customer.find({
-        assignedTo: employee._id,
-        deletedAt: null, // Only update active customers
-      });
+    // --- NEW LOGIC: Cascade Update for Customers + Tickets ---
+if (newStatus === "Inactive") {
+  // 1) Remove employee from assigned customers
+  const affectedCustomers = await Customer.find({
+    assignedTo: employee._id,
+    deletedAt: null,
+  });
 
-      affectedCustomersCount = affectedCustomers.length; // Store the count
+  affectedCustomersCount = affectedCustomers.length;
 
-      const promises = affectedCustomers.map(async (customer) => {
-        // 2. Remove the employee's ID from the assignedTo array
-        customer.assignedTo = customer.assignedTo.filter(
-          (assignedId) => String(assignedId) !== String(employee._id)
-        );
+  const customerUpdates = affectedCustomers.map(async (customer) => {
+    customer.assignedTo = customer.assignedTo.filter(
+      (assignedId) => String(assignedId) !== String(employee._id)
+    );
 
-        // 3. Add an audit trail entry
-        customer.audit.push({
-          action: "assignment_removed",
-          by: managerId,
-          byName: managerName,
-          note: `Removed deactivated employee: ${employee.name} (ID: ${employee._id}).`,
-          at: new Date(),
-        });
-        return customer.save();
-      });
+    customer.audit.push({
+      action: "assignment_removed",
+      by: managerId,
+      byName: managerName,
+      note: `Employee ${employee.name} deactivated. Removed from customer assignment.`,
+      at: new Date(),
+    });
+    return customer.save();
+  });
 
-      await Promise.all(promises);
-    }
-    // --- END NEW LOGIC ---
+  await Promise.all(customerUpdates);
+
+  // ✅ 2) Remove employee from Tickets
+  const tickets = await Ticket.find({ assignedTo: employee._id });
+
+  const ticketUpdates = tickets.map(async (ticket) => {
+    ticket.assignedTo = ticket.assignedTo.filter(
+      (id) => String(id) !== String(employee._id)
+    );
+
+    ticket.audit.push({
+      action: "assignment_removed",
+      by: managerId,
+      byName: managerName,
+      note: `Employee ${employee.name} became inactive. Ticket marked as Unassigned.`,
+      diff: { assignedTo: { from: employee.name, to: "Unassigned" } },
+      at: new Date(),
+    });
+
+    await ticket.save();
+  });
+
+  await Promise.all(ticketUpdates);
+}
+
 
     res.json({
       message: `Employee ${employee.name} ${
@@ -189,3 +197,38 @@ export const toggleEmployeeStatus = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+export const getEmployeeStats = async (req, res) => {
+  try {
+    const employeeId = new mongoose.Types.ObjectId(req.user.id);
+    const companyId = new mongoose.Types.ObjectId(req.user.companyId);
+
+    const totalCustomers = await Customer.countDocuments({
+      companyId,
+      assignedTo: { $in: [employeeId] }   // ✅ FIXED
+    });
+
+    const totalTickets = await Ticket.countDocuments({
+      companyId,
+      assignedTo: employeeId
+    });
+
+    const solvedTickets = await Ticket.countDocuments({
+      companyId,
+      assignedTo: employeeId,
+      status: "resolved"
+    });
+
+    const pendingTickets = await Ticket.countDocuments({
+      companyId,
+      assignedTo: employeeId,
+      status: "pending"
+    });
+
+    res.json({ totalCustomers, totalTickets, solvedTickets, pendingTickets });
+
+  } catch (error) {
+    console.error("❌ Error fetching stats:", error);
+    res.status(500).json({ message: "Unable to fetch employee stats" });
+  }
+};
+

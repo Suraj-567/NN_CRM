@@ -20,7 +20,8 @@
     "express": "^5.1.0",
     "mongoose": "^8.19.2",
     "morgan": "^1.10.1",
-    "nodemailer": "^7.0.10"
+    "nodemailer": "^7.0.10",
+    "twilio": "^5.10.5"
   },
   "devDependencies": {
     "@babel/plugin-transform-modules-commonjs": "^7.27.1",

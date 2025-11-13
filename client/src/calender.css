@@ -1,0 +1,112 @@
+/* --- src/Calendar.css --- */
+/* This file styles the 'react-calendar' component for our dark theme */
+
+/* Main wrapper */
+.react-calendar {
+  width: 100%;
+  background: #11111f; /* Dark background */
+  border: 1px solid #374151; /* gray-700 */
+  border-radius: 0.75rem; /* rounded-xl */
+  padding: 1rem;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+/* Remove default border */
+.react-calendar,
+.react-calendar *,
+.react-calendar *:before,
+.react-calendar *:after {
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+.react-calendar__viewContainer {
+  border: none;
+}
+
+.react-calendar button {
+  margin: 0;
+  border: 0;
+  outline: none;
+  border-radius: 0.5rem; /* rounded-lg */
+  transition: all 0.2s;
+}
+
+.react-calendar button:enabled:hover {
+  background-color: #374151; /* gray-700 */
+  cursor: pointer;
+}
+
+/* Navigation bar (Month/Year) */
+.react-calendar__navigation {
+  display: flex;
+  height: 44px;
+  margin-bottom: 1rem;
+}
+
+.react-calendar__navigation button {
+  min-width: 44px;
+  background: none;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #d1d5db; /* gray-300 */
+}
+
+.react-calendar__navigation button:disabled {
+  color: #4b5563; /* gray-600 */
+}
+
+/* Day tiles */
+.react-calendar__month-view__weekdays {
+  text-align: center;
+  text-transform: uppercase;
+  font-weight: bold;
+  font-size: 0.75rem;
+  color: #9ca3af; /* gray-400 */
+  padding-bottom: 0.5rem;
+}
+
+/* Weekday tiles */
+.react-calendar__month-view__weekdays__weekday {
+  padding: 0.5rem;
+}
+
+/* Day tiles */
+.react-calendar__tile {
+  background: none;
+  text-align: center;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.875rem;
+  color: #d1d5db; /* gray-300 */
+  height: 50px; /* Give tiles a consistent height */
+  position: relative; /* For the task dot */
+}
+
+/* Today's date */
+.react-calendar__tile--now {
+  background: #312e81aa; /* indigo-900/70 */
+  color: #e0e7ff; /* indigo-100 */
+  font-weight: bold;
+}
+.react-calendar__tile--now:enabled:hover,
+.react-calendar__tile--now:enabled:focus {
+  background: #312e81; /* indigo-900 */
+}
+
+/* Active/Selected date */
+.react-calendar__tile--active {
+  background: #4f46e5; /* indigo-600 */
+  color: white;
+  font-weight: bold;
+}
+.react-calendar__tile--active:enabled:hover,
+.react-calendar__tile--active:enabled:focus {
+  background: #4338ca; /* indigo-700 */
+}
+
+/* Other month's days */
+.react-calendar__month-view__days__day--neighboringMonth {
+  color: #4b5563; /* gray-600 */
+}

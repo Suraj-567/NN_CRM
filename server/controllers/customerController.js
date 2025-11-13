@@ -68,7 +68,7 @@ export const createCustomer = async (req, res) => {
     customer.audit.push({
       action: "created",
       by: manager?._id,
-      byName: manager?.name || "System",
+      byName: manager?.name || "Business Manager",
       note: `Customer created${
         assignedNames !== "None" ? ` and assigned to ${assignedNames}` : ""
       }${status !== "Lead" ? ` with status: ${status}` : ""}`,
@@ -137,7 +137,7 @@ export const getCustomer = async (req, res) => {
     if (!mongoose.isValidObjectId(id))
       return res.status(400).json({ message: "Invalid customer ID" });
 
-    const customer = await Customer.findById(id);
+    const customer = await Customer.findById(id).populate("engagementHistory.by", "name");
     if (!customer) return res.status(404).json({ message: "Customer not found" });
     if (String(customer.companyId) !== String(companyId))
       return res.status(403).json({ message: "Forbidden" });
@@ -348,5 +348,43 @@ export const restoreCustomer = async (req, res) => {
   } catch (err) {
     console.error("❌ Error restoring customer:", err);
     res.status(500).json({ message: "Server error while restoring customer" });
+  }
+};
+export const getAssignedCustomers = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    
+    const customers = await Customer.find({
+      assignedTo: { $in: [userId] },
+      deletedAt: null,
+    }).sort({ updatedAt: -1 });
+
+    res.json(customers);
+  } catch (err) {
+    console.error("❌ Error fetching assigned customers:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const addEngagement = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, summary, at } = req.body;
+
+    const customer = await Customer.findById(id);
+    if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+    customer.engagementHistory.push({
+      type,
+      summary,
+      at,
+      by: req.user.id,
+      byName: req.user?.name || req.user?.email || "Employee",
+    });
+
+    await customer.save();
+    res.json({ message: "Engagement logged" });
+  } catch (err) {
+    res.status(500).json({ message: "Error saving engagement" });
   }
 };

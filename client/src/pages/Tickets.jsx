@@ -244,8 +244,6 @@ export default function Tickets() {
                   <input name="slaDeadline" type="datetime-local" value={form.slaDeadline} onChange={handleChange} className="bg-gray-800 p-2 rounded" />
                   <select name="status" value={form.status} onChange={handleChange} className="bg-gray-800 p-2 rounded">
                     <option>Open</option>
-                    <option>In Progress</option>
-                    <option>Resolved</option>
                     <option>Closed</option>
                   </select>
                 </div>

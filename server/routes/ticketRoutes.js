@@ -8,6 +8,8 @@ import {
   assignTicket,
   customerTicketsSummary,
   getCustomerTickets,
+  getAssignedTickets,
+  updateTicketStatus
 } from "../controllers/ticketController.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 
@@ -22,5 +24,7 @@ router.get("/customer/:customerId", getCustomerTickets); // tickets of a single 
 router.get("/:id", getTicket);
 router.put("/:id", updateTicket);
 router.patch("/:id/assign", assignTicket);
+router.get("/assigned/me", getAssignedTickets);
+router.patch("/:id/status", updateTicketStatus);
 
 export default router;
