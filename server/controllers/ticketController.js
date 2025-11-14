@@ -2,7 +2,6 @@
 import Ticket from "../models/Ticket.js";
 import Customer from "../models/Customer.js";
 import Employee from "../models/Employee.js";
-import User from "../models/User.js";
 import mongoose from "mongoose";
 
 /**
@@ -165,7 +164,7 @@ export const updateTicket = async (req, res) => {
   try {
     const companyId = req.user?.companyId;
     const userId = req.user?.id;
-    const userName = req.user?.name || "Business Manager";
+    const userName = req.user?.name ?? (req.user?.role === "manager" ? "Business Manager" : "Employee");
     const { id } = req.params;
     const updates = req.body;
 

@@ -13,6 +13,7 @@ export default {
     "src/pages/ApprovedCompanies.jsx",
     "src/pages/CRMApproval.jsx",
     "src/pages/CustomerTickets.jsx",
+    "src/pages/BusinessLogin.jsx",
   ],
   coverageReporters: ["text", "html"],
   coverageThreshold: {

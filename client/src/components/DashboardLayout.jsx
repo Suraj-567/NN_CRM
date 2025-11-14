@@ -29,7 +29,11 @@ export default function DashboardLayout() {
     <div className="fixed inset-0 flex bg-gray-900 text-gray-100">
       <div className={`${isSidebarOpen ? "w-64" : "w-20"} bg-gray-800 p-4 flex flex-col transition-all duration-300`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className={`text-xl font-bold ${!isSidebarOpen && "hidden"}`}>CRM Dashboard</h2>
+          <Link to="/manager/dashboard">
+           <h2 className={`text-xl font-bold ${!isSidebarOpen && "hidden"}`}>
+             CRM Dashboard
+           </h2>
+</Link>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-gray-300 hover:text-white">
             <FiMenu size={22} />
           </button>

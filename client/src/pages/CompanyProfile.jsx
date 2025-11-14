@@ -74,7 +74,7 @@ export default function CompanyProfile() {
       })
       .then((res) => setCompany(res.data))
       .catch(() => {
-        console.log("Failed to load profile");
+        console.error("Failed to load profile");
         setError(true);
       })
       .finally(() => setLoading(false));

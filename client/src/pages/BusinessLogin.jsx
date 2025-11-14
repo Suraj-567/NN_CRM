@@ -102,7 +102,7 @@ export default function BusinessLogin() {
         {/* --- ENHANCEMENT: Visually improved links section */}
         <div className="mt-6 pt-6 border-t border-gray-700 space-y-4">
           <p className="text-center text-gray-400">
-            Don't have an account?
+            Don`&apos;t have an account?
           </p>
           <Link
             to="/register"

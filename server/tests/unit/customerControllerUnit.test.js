@@ -1,8 +1,20 @@
-import { createCustomer, listCustomers, getCustomer, updateCustomer, convertLead, softDeleteCustomer, restoreCustomer } from "../../controllers/customerController.js";
+//server/tests/unit/customerControllerUnit.test.js
+
+import { 
+    createCustomer, 
+    listCustomers, 
+    getCustomer, 
+    updateCustomer, 
+    convertLead, 
+    softDeleteCustomer, 
+    restoreCustomer,
+    getAssignedCustomers,
+    addEngagement
+} from "../../controllers/customerController.js";
 import Customer from "../../models/Customer.js";
 import User from "../../models/User.js";
 import Employee from "../../models/Employee.js";
-import mongoose from "mongoose"; // 👈 1. Import mongoose
+import mongoose from "mongoose";
 
 // Mock Data
 const MOCK_COMPANY_ID = "69037048ebed3d350a595d9f";
@@ -23,14 +35,13 @@ jest.mock("mongoose", () => ({
 
 // Mock Customer to be a Jest constructor and mock its static methods
 jest.mock("../../models/Customer.js", () => {
-    // We define the needed constants here or use the literal strings.
-    // Using literal strings is safer, but we'll use a local constant for clarity.
     const LOCAL_MOCK_COMPANY_ID = "69037048ebed3d350a595d9f";
     const LOCAL_MOCK_EMPLOYEE_ID = "6905d7c0c2e3fbe27a14dcd3";
     
     // Create a mock instance object for the customer
     const mockCustomerInstance = {
         audit: [],
+        engagementHistory: [],
         save: jest.fn().mockResolvedValue(true),
         toObject: jest.fn().mockImplementation(() => ({
             _id: "new_cust_id",
@@ -39,7 +50,6 @@ jest.mock("../../models/Customer.js", () => {
             status: "Lead",
             assignedTo: [LOCAL_MOCK_EMPLOYEE_ID],
         })),
-        // FIX: Replaced MOCK_COMPANY_ID with the literal string or local constant
         companyId: LOCAL_MOCK_COMPANY_ID, 
         name: "New Customer Inc.",
         status: "Lead",
@@ -74,6 +84,11 @@ const mockEmployeeQuery = (resolvedValue) => ({
     select: jest.fn().mockResolvedValue(resolvedValue),
 });
 
+// Helper to create a chainable populate mock
+const createPopulateMock = (resolvedValue) => ({
+    populate: jest.fn().mockResolvedValue(resolvedValue),
+});
+
 describe("Customer Controller", () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -86,7 +101,7 @@ describe("Customer Controller", () => {
         ]));
     });
 
-    // --- createCustomer Tests (Your Existing Tests) ---
+    // --- createCustomer Tests ---
     
     test("createCustomer returns 400 if companyId missing", async () => {
         const req = { user: {}, body: { name: "Cust" } };
@@ -154,7 +169,7 @@ describe("Customer Controller", () => {
         errorSpy.mockRestore();
     });
 
-    // --- listCustomers Tests (Your Existing Tests) ---
+    // --- listCustomers Tests ---
 
     test("listCustomers returns empty array if no data", async () => {
         const req = { user: { companyId: MOCK_COMPANY_ID } };
@@ -187,7 +202,7 @@ describe("Customer Controller", () => {
         errorSpy.mockRestore();
     });
     
-    // --- NEW getCustomer Tests (Lines 134-152) ---
+    // --- getCustomer Tests ---
     
     test("getCustomer returns 400 for invalid ID", async () => {
         const req = { params: { id: "invalid_id" }, user: { companyId: MOCK_COMPANY_ID } };
@@ -203,7 +218,9 @@ describe("Customer Controller", () => {
         const req = { params: { id: MOCK_USER_ID }, user: { companyId: MOCK_COMPANY_ID } };
         const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
         mongoose.isValidObjectId.mockReturnValue(true);
-        Customer.findById.mockResolvedValue(null);
+        
+        // Mock findById to return a populate chain that resolves to null
+        Customer.findById.mockReturnValue(createPopulateMock(null));
 
         await getCustomer(req, res);
         expect(res.status).toHaveBeenCalledWith(404);
@@ -213,10 +230,13 @@ describe("Customer Controller", () => {
         const req = { params: { id: MOCK_USER_ID }, user: { companyId: MOCK_OTHER_COMPANY_ID } };
         const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
         mongoose.isValidObjectId.mockReturnValue(true);
-        Customer.findById.mockResolvedValue({ 
+        
+        const mockCustomer = { 
             companyId: MOCK_COMPANY_ID,
             toObject: () => ({}),
-        });
+        };
+        
+        Customer.findById.mockReturnValue(createPopulateMock(mockCustomer));
 
         await getCustomer(req, res);
         expect(res.status).toHaveBeenCalledWith(403);
@@ -234,7 +254,7 @@ describe("Customer Controller", () => {
         };
         const mockEmployees = [{ name: "Emp B", email: "b@test.com" }];
 
-        Customer.findById.mockResolvedValue(mockCustomer);
+        Customer.findById.mockReturnValue(createPopulateMock(mockCustomer));
         Employee.find.mockImplementation(() => ({
             select: jest.fn().mockResolvedValue(mockEmployees),
         }));
@@ -246,7 +266,7 @@ describe("Customer Controller", () => {
         );
     });
     
-    // --- NEW updateCustomer Pre-Check Tests (Lines 160-169) ---
+    // --- updateCustomer Tests ---
 
     test("updateCustomer returns 400 for invalid ID", async () => {
         const req = { params: { id: "invalid_id" }, user: { companyId: MOCK_COMPANY_ID }, body: {} };
@@ -279,224 +299,380 @@ describe("Customer Controller", () => {
         await updateCustomer(req, res);
         expect(res.status).toHaveBeenCalledWith(403);
     });
+
     test("updateCustomer successfully updates a basic field (e.g., name)", async () => {
-    // 1. Arrange
-    const req = {
-        params: { id: MOCK_CUSTOMER_ID },
-        user: { companyId: MOCK_COMPANY_ID, id: MOCK_USER_ID },
-        body: { name: "Updated Customer Name" },
-    };
-    const res = { json: jest.fn() };
-    mongoose.isValidObjectId.mockReturnValue(true);
+        const req = {
+            params: { id: MOCK_CUSTOMER_ID },
+            user: { companyId: MOCK_COMPANY_ID, id: MOCK_USER_ID },
+            body: { name: "Updated Customer Name" },
+        };
+        const res = { json: jest.fn() };
+        mongoose.isValidObjectId.mockReturnValue(true);
 
-    const mockCustomer = {
-        companyId: MOCK_COMPANY_ID,
-        name: "Old Customer Name",
-        assignedTo: [], // Important: must be an array for logic
-        audit: [],
-        save: jest.fn().mockResolvedValue(true),
-        // Mock schema paths for the update loop to work
-        schema: { paths: { name: {}, status: {}, assignedTo: {} } },
-        toObject: jest.fn().mockImplementation(() => ({
-            id: MOCK_CUSTOMER_ID,
-            name: "Updated Customer Name",
-        })),
-    };
-    Customer.findById.mockResolvedValue(mockCustomer);
-    
-    // Employee.find will be called once for final response population (mocked in beforeEach is sufficient)
+        const mockCustomer = {
+            companyId: MOCK_COMPANY_ID,
+            name: "Old Customer Name",
+            assignedTo: [],
+            audit: [],
+            save: jest.fn().mockResolvedValue(true),
+            schema: { paths: { name: {}, status: {}, assignedTo: {} } },
+            toObject: jest.fn().mockImplementation(() => ({
+                id: MOCK_CUSTOMER_ID,
+                name: "Updated Customer Name",
+            })),
+        };
+        Customer.findById.mockResolvedValue(mockCustomer);
 
-    // 2. Act
-    await updateCustomer(req, res);
+        await updateCustomer(req, res);
 
-    // 3. Assert
-    expect(mockCustomer.name).toBe("Updated Customer Name");
-    expect(mockCustomer.audit.length).toBe(1);
-    expect(mockCustomer.audit[0].action).toBe("updated");
-    expect(mockCustomer.audit[0].diff.name).toEqual({
-        from: "Old Customer Name",
-        to: "Updated Customer Name",
-    });
-    expect(mockCustomer.save).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalled();
-});
-
-
-test("updateCustomer successfully updates assignedTo and logs audit", async () => {
-    // 1. Arrange
-    const req = {
-        params: { id: MOCK_CUSTOMER_ID },
-        user: { companyId: MOCK_COMPANY_ID, id: MOCK_USER_ID },
-        body: { assignedTo: [MOCK_NEW_EMP_ID] },
-    };
-    const res = { json: jest.fn() };
-    mongoose.isValidObjectId.mockReturnValue(true);
-
-    const mockCustomer = {
-        companyId: MOCK_COMPANY_ID,
-        name: "Customer A",
-        assignedTo: [MOCK_OLD_EMP_ID], // Old assignment
-        audit: [],
-        save: jest.fn().mockResolvedValue(true),
-        schema: { paths: { name: {}, status: {}, assignedTo: {} } },
-        toObject: jest.fn().mockImplementation(() => ({ id: MOCK_CUSTOMER_ID })),
-    };
-    Customer.findById.mockResolvedValue(mockCustomer);
-
-    // Mock employees for the three Employee.find calls:
-    // 1. Old employee names (for audit 'from')
-    // 2. New employee names (for audit 'to')
-    // 3. Final populated employees (for response)
-    const oldEmployees = [{ name: "Old Employee" }];
-    const newEmployees = [{ name: "New Employee" }];
-
-    Employee.find
-        .mockImplementationOnce(() => mockEmployeeQuery(newEmployees)) // 1. newIds fetch (Line 202)
-        .mockImplementationOnce(() => mockEmployeeQuery(oldEmployees)) // 2. oldIds fetch (Line 206)
-        .mockImplementationOnce(() => mockEmployeeQuery(newEmployees)); // 3. Final response population (Line 236)
-
-
-    // 2. Act
-    await updateCustomer(req, res);
-
-    // 3. Assert
-    expect(mockCustomer.assignedTo).toEqual([MOCK_NEW_EMP_ID]);
-    expect(mockCustomer.audit.length).toBe(1);
-    expect(mockCustomer.audit[0].diff.assignedTo).toEqual({
-        from: "Old Employee",
-        to: "New Employee",
-    });
-    expect(mockCustomer.save).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalled();
-});
-test("convertLead returns 400 for invalid ID", async () => {
-    const req = { params: { id: "invalid_id" }, user: { companyId: MOCK_COMPANY_ID } };
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    mongoose.isValidObjectId.mockReturnValue(false);
-
-    await convertLead(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-});
-
-test("convertLead returns 400 if customer is already 'Converted'", async () => {
-    const req = { params: { id: MOCK_LEAD_ID }, user: { companyId: MOCK_COMPANY_ID } };
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    mongoose.isValidObjectId.mockReturnValue(true);
-
-    Customer.findById.mockImplementationOnce(id => {
-        if (id === MOCK_LEAD_ID) {
-            return { companyId: MOCK_COMPANY_ID, status: "Converted" };
-        }
-        // Mock the second findById for the populate line (282) to return something
-        return { status: "Converted", populate: jest.fn().mockResolvedValue({}) }; 
+        expect(mockCustomer.name).toBe("Updated Customer Name");
+        expect(mockCustomer.audit.length).toBe(1);
+        expect(mockCustomer.audit[0].action).toBe("updated");
+        expect(mockCustomer.audit[0].diff.name).toEqual({
+            from: "Old Customer Name",
+            to: "Updated Customer Name",
+        });
+        expect(mockCustomer.save).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalled();
     });
 
-    await convertLead(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ message: "Customer already converted" });
-});
+    test("updateCustomer successfully updates assignedTo and logs audit", async () => {
+        const req = {
+            params: { id: MOCK_CUSTOMER_ID },
+            user: { companyId: MOCK_COMPANY_ID, id: MOCK_USER_ID },
+            body: { assignedTo: [MOCK_NEW_EMP_ID] },
+        };
+        const res = { json: jest.fn() };
+        mongoose.isValidObjectId.mockReturnValue(true);
 
-test("convertLead successfully converts a Lead to Customer", async () => {
-    // 1. Arrange
-    const req = { 
-        params: { id: MOCK_LEAD_ID }, 
-        user: { companyId: MOCK_COMPANY_ID, id: MOCK_USER_ID } 
-    };
-    const res = { json: jest.fn() };
-    mongoose.isValidObjectId.mockReturnValue(true);
+        const mockCustomer = {
+            companyId: MOCK_COMPANY_ID,
+            name: "Customer A",
+            assignedTo: [MOCK_OLD_EMP_ID],
+            audit: [],
+            save: jest.fn().mockResolvedValue(true),
+            schema: { paths: { name: {}, status: {}, assignedTo: {} } },
+            toObject: jest.fn().mockImplementation(() => ({ id: MOCK_CUSTOMER_ID })),
+        };
+        Customer.findById.mockResolvedValue(mockCustomer);
 
-    const mockLead = {
-        _id: MOCK_LEAD_ID,
-        companyId: MOCK_COMPANY_ID,
-        status: "Lead",
-        leadSource: "Web",
-        audit: [],
-        save: jest.fn().mockResolvedValue(true),
-    };
-    
-    // Mock for initial findById
-    Customer.findById.mockResolvedValueOnce(mockLead); 
-    
-    // Mock for final population call (line 282)
-    const mockPopulatedCustomer = { name: "Converted", assignedTo: [{ name: "Emp" }] };
-    Customer.findById.mockImplementationOnce(() => ({
-        populate: jest.fn().mockResolvedValue(mockPopulatedCustomer),
-    }));
+        const oldEmployees = [{ name: "Old Employee" }];
+        const newEmployees = [{ name: "New Employee" }];
 
-    // 2. Act
-    await convertLead(req, res);
+        Employee.find
+            .mockImplementationOnce(() => mockEmployeeQuery(newEmployees))
+            .mockImplementationOnce(() => mockEmployeeQuery(oldEmployees))
+            .mockImplementationOnce(() => mockEmployeeQuery(newEmployees));
 
-    // 3. Assert
-    expect(mockLead.status).toBe("Converted");
-    expect(mockLead.audit.length).toBe(1);
-    expect(mockLead.audit[0].action).toBe("converted");
-    expect(mockLead.save).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        message: "Lead converted successfully",
-        customer: mockPopulatedCustomer,
-    }));
-});
+        await updateCustomer(req, res);
 
-// Add these to your 'Customer Controller' describe block in customerControllerUnit.test.js
+        expect(mockCustomer.assignedTo).toEqual([MOCK_NEW_EMP_ID]);
+        expect(mockCustomer.audit.length).toBe(1);
+        expect(mockCustomer.audit[0].diff.assignedTo).toEqual({
+            from: "Old Employee",
+            to: "New Employee",
+        });
+        expect(mockCustomer.save).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalled();
+    });
 
-test("softDeleteCustomer successfully deactivates a customer", async () => {
-    // 1. Arrange
-    const MOCK_DELETE_ID = "6905d7c0c2e3fbe27a14dcd7";
-    const req = { 
-        params: { id: MOCK_DELETE_ID }, 
-        user: { id: MOCK_USER_ID } 
-    };
-    const res = { json: jest.fn() };
+    // --- convertLead Tests ---
 
-    const mockCustomer = {
-        _id: MOCK_DELETE_ID,
-        audit: [],
-        save: jest.fn().mockResolvedValue(true),
-    };
-    Customer.findById.mockResolvedValue(mockCustomer);
+    test("convertLead returns 400 for invalid ID", async () => {
+        const req = { params: { id: "invalid_id" }, user: { companyId: MOCK_COMPANY_ID } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        mongoose.isValidObjectId.mockReturnValue(false);
 
-    // 2. Act
-    await softDeleteCustomer(req, res);
+        await convertLead(req, res);
+        expect(res.status).toHaveBeenCalledWith(400);
+    });
 
-    // 3. Assert
-    expect(mockCustomer.state).toBe("deactive");
-    expect(mockCustomer.deletedBy).toBe(MOCK_USER_ID);
-    expect(mockCustomer.deletedAt).toBeInstanceOf(Date);
-    expect(mockCustomer.audit[0].action).toBe("deleted");
-    expect(mockCustomer.save).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalled();
-});
+    test("convertLead returns 404 if customer not found", async () => {
+        const req = { params: { id: MOCK_LEAD_ID }, user: { companyId: MOCK_COMPANY_ID } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        mongoose.isValidObjectId.mockReturnValue(true);
+        Customer.findById.mockResolvedValue(null);
 
-// Add these to your 'Customer Controller' describe block in customerControllerUnit.test.js
+        await convertLead(req, res);
+        expect(res.status).toHaveBeenCalledWith(404);
+    });
 
-test("restoreCustomer successfully restores a soft-deleted customer", async () => {
-    // 1. Arrange
-    const MOCK_RESTORE_ID = "6905d7c0c2e3fbe27a14dcd8";
-    const req = { 
-        params: { id: MOCK_RESTORE_ID }, 
-        user: { id: MOCK_USER_ID } 
-    };
-    const res = { json: jest.fn() };
+    test("convertLead returns 400 if customer is already 'Converted'", async () => {
+        const req = { params: { id: MOCK_LEAD_ID }, user: { companyId: MOCK_COMPANY_ID } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        mongoose.isValidObjectId.mockReturnValue(true);
 
-    const mockCustomer = {
-        _id: MOCK_RESTORE_ID,
-        deletedAt: new Date(), // Simulate a deleted customer
-        deletedBy: MOCK_USER_ID,
-        state: "deactive",
-        audit: [],
-        save: jest.fn().mockResolvedValue(true),
-    };
-    Customer.findById.mockResolvedValue(mockCustomer);
+        Customer.findById.mockResolvedValue({ 
+            companyId: MOCK_COMPANY_ID, 
+            status: "Converted" 
+        });
 
-    // 2. Act
-    await restoreCustomer(req, res);
+        await convertLead(req, res);
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ message: "Customer already converted" });
+    });
 
-    // 3. Assert
-    expect(mockCustomer.state).toBe("active");
-    expect(mockCustomer.deletedBy).toBeNull();
-    expect(mockCustomer.deletedAt).toBeNull();
-    expect(mockCustomer.audit[0].action).toBe("restored");
-    expect(mockCustomer.save).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalled();
-});
+    test("convertLead successfully converts a Lead to Customer", async () => {
+        const req = { 
+            params: { id: MOCK_LEAD_ID }, 
+            user: { companyId: MOCK_COMPANY_ID, id: MOCK_USER_ID } 
+        };
+        const res = { json: jest.fn() };
+        mongoose.isValidObjectId.mockReturnValue(true);
+
+        const mockLead = {
+            _id: MOCK_LEAD_ID,
+            companyId: MOCK_COMPANY_ID,
+            status: "Lead",
+            leadSource: "Web",
+            audit: [],
+            save: jest.fn().mockResolvedValue(true),
+        };
+        
+        Customer.findById.mockResolvedValueOnce(mockLead); 
+        
+        const mockPopulatedCustomer = { name: "Converted", assignedTo: [{ name: "Emp" }] };
+        Customer.findById.mockReturnValueOnce(createPopulateMock(mockPopulatedCustomer));
+
+        await convertLead(req, res);
+
+        expect(mockLead.status).toBe("Converted");
+        expect(mockLead.audit.length).toBe(1);
+        expect(mockLead.audit[0].action).toBe("converted");
+        expect(mockLead.save).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            message: "Lead converted successfully",
+            customer: mockPopulatedCustomer,
+        }));
+    });
+
+    // --- softDeleteCustomer Tests ---
+
+    test("softDeleteCustomer returns 404 if customer not found", async () => {
+        const req = { params: { id: "nonexistent_id" }, user: { id: MOCK_USER_ID } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        Customer.findById.mockResolvedValue(null);
+
+        await softDeleteCustomer(req, res);
+        expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    test("softDeleteCustomer successfully deactivates a customer", async () => {
+        const MOCK_DELETE_ID = "6905d7c0c2e3fbe27a14dcd7";
+        const req = { 
+            params: { id: MOCK_DELETE_ID }, 
+            user: { id: MOCK_USER_ID } 
+        };
+        const res = { json: jest.fn() };
+
+        const mockCustomer = {
+            _id: MOCK_DELETE_ID,
+            audit: [],
+            save: jest.fn().mockResolvedValue(true),
+        };
+        Customer.findById.mockResolvedValue(mockCustomer);
+
+        await softDeleteCustomer(req, res);
+
+        expect(mockCustomer.state).toBe("deactive");
+        expect(mockCustomer.deletedBy).toBe(MOCK_USER_ID);
+        expect(mockCustomer.deletedAt).toBeInstanceOf(Date);
+        expect(mockCustomer.audit[0].action).toBe("deleted");
+        expect(mockCustomer.save).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalled();
+    });
+
+    // --- restoreCustomer Tests ---
+
+    test("restoreCustomer returns 404 if customer not found", async () => {
+        const req = { params: { id: "nonexistent_id" }, user: { id: MOCK_USER_ID } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        Customer.findById.mockResolvedValue(null);
+
+        await restoreCustomer(req, res);
+        expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    test("restoreCustomer successfully restores a soft-deleted customer", async () => {
+        const MOCK_RESTORE_ID = "6905d7c0c2e3fbe27a14dcd8";
+        const req = { 
+            params: { id: MOCK_RESTORE_ID }, 
+            user: { id: MOCK_USER_ID } 
+        };
+        const res = { json: jest.fn() };
+
+        const mockCustomer = {
+            _id: MOCK_RESTORE_ID,
+            deletedAt: new Date(),
+            deletedBy: MOCK_USER_ID,
+            state: "deactive",
+            audit: [],
+            save: jest.fn().mockResolvedValue(true),
+        };
+        Customer.findById.mockResolvedValue(mockCustomer);
+
+        await restoreCustomer(req, res);
+
+        expect(mockCustomer.state).toBe("active");
+        expect(mockCustomer.deletedBy).toBeNull();
+        expect(mockCustomer.deletedAt).toBeNull();
+        expect(mockCustomer.audit[0].action).toBe("restored");
+        expect(mockCustomer.save).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalled();
+    });
+
+    // --- NEW: getAssignedCustomers Tests ---
+
+    test("getAssignedCustomers returns empty array if no assigned customers", async () => {
+        const req = { user: { id: MOCK_USER_ID } };
+        const res = { json: jest.fn() };
+
+        const mockSort = {
+            sort: jest.fn().mockResolvedValue([]),
+        };
+        Customer.find.mockReturnValue(mockSort);
+
+        await getAssignedCustomers(req, res);
+        
+        expect(Customer.find).toHaveBeenCalledWith({
+            assignedTo: { $in: [MOCK_USER_ID] },
+            deletedAt: null,
+        });
+        expect(res.json).toHaveBeenCalledWith([]);
+    });
+
+    test("getAssignedCustomers successfully returns assigned customers", async () => {
+        const req = { user: { id: MOCK_USER_ID } };
+        const res = { json: jest.fn() };
+
+        const mockCustomers = [
+            { _id: "cust1", name: "Customer 1", assignedTo: [MOCK_USER_ID] },
+            { _id: "cust2", name: "Customer 2", assignedTo: [MOCK_USER_ID] },
+        ];
+
+        const mockSort = {
+            sort: jest.fn().mockResolvedValue(mockCustomers),
+        };
+        Customer.find.mockReturnValue(mockSort);
+
+        await getAssignedCustomers(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(mockCustomers);
+        expect(mockSort.sort).toHaveBeenCalledWith({ updatedAt: -1 });
+    });
+
+    test("getAssignedCustomers handles server error", async () => {
+        const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+        const req = { user: { id: MOCK_USER_ID } };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+        const mockSort = {
+            sort: jest.fn().mockRejectedValue(new Error("DB error")),
+        };
+        Customer.find.mockReturnValue(mockSort);
+
+        await getAssignedCustomers(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ message: "Server error" });
+        errorSpy.mockRestore();
+    });
+
+    // --- NEW: addEngagement Tests ---
+
+    test("addEngagement returns 404 if customer not found", async () => {
+        const req = {
+            params: { id: "nonexistent_id" },
+            user: { id: MOCK_USER_ID, name: "Test User" },
+            body: { type: "call", summary: "Discussed pricing", at: new Date() }
+        };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+        Customer.findById.mockResolvedValue(null);
+
+        await addEngagement(req, res);
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({ message: "Customer not found" });
+    });
+
+    test("addEngagement successfully logs engagement", async () => {
+        const engagementDate = new Date();
+        const req = {
+            params: { id: MOCK_CUSTOMER_ID },
+            user: { id: MOCK_USER_ID, name: "Test User", email: "test@test.com" },
+            body: { 
+                type: "call", 
+                summary: "Discussed pricing options", 
+                at: engagementDate 
+            }
+        };
+        const res = { json: jest.fn() };
+
+        const mockCustomer = {
+            _id: MOCK_CUSTOMER_ID,
+            engagementHistory: [],
+            save: jest.fn().mockResolvedValue(true),
+        };
+        Customer.findById.mockResolvedValue(mockCustomer);
+
+        await addEngagement(req, res);
+
+        expect(mockCustomer.engagementHistory.length).toBe(1);
+        expect(mockCustomer.engagementHistory[0]).toEqual({
+            type: "call",
+            summary: "Discussed pricing options",
+            at: engagementDate,
+            by: MOCK_USER_ID,
+            byName: "Test User",
+        });
+        expect(mockCustomer.save).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalledWith({ message: "Engagement logged" });
+    });
+
+    test("addEngagement uses email as fallback if name not provided", async () => {
+        const engagementDate = new Date();
+        const req = {
+            params: { id: MOCK_CUSTOMER_ID },
+            user: { id: MOCK_USER_ID, email: "test@test.com" },
+            body: { 
+                type: "meeting", 
+                summary: "Product demo", 
+                at: engagementDate 
+            }
+        };
+        const res = { json: jest.fn() };
+
+        const mockCustomer = {
+            _id: MOCK_CUSTOMER_ID,
+            engagementHistory: [],
+            save: jest.fn().mockResolvedValue(true),
+        };
+        Customer.findById.mockResolvedValue(mockCustomer);
+
+        await addEngagement(req, res);
+
+        expect(mockCustomer.engagementHistory[0].byName).toBe("test@test.com");
+    });
+
+    test("addEngagement handles server error during save", async () => {
+        const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+        const req = {
+            params: { id: MOCK_CUSTOMER_ID },
+            user: { id: MOCK_USER_ID, name: "Test User" },
+            body: { type: "call", summary: "Test", at: new Date() }
+        };
+        const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+        const mockCustomer = {
+            _id: MOCK_CUSTOMER_ID,
+            engagementHistory: [],
+            save: jest.fn().mockRejectedValue(new Error("Save failed")),
+        };
+        Customer.findById.mockResolvedValue(mockCustomer);
+
+        await addEngagement(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ message: "Error saving engagement" });
+        errorSpy.mockRestore();
+    });
 });

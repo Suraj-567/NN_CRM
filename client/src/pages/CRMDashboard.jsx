@@ -47,7 +47,7 @@ export default function CRMDashboard() {
       })
       .then((res) => setStats(res.data))
       .catch(() => {
-        console.log("Failed to load stats");
+        console.error("Failed to load stats");
         setError(true); // Set error on fail
       });
   }, [token]); // Added token as dependency

@@ -56,8 +56,77 @@ export const getEmployees = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({ message: "Company ID missing in token" });
     }
-    const employees = await Employee.find({ companyId });
-    res.json(employees);
+
+    // Fetch all employees for the company
+    const employees = await Employee.find({ companyId }).sort({ createdAt: -1 });
+
+    // Get ticket counts for each employee using aggregation
+    const ticketCounts = await Ticket.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId),
+          assignedTo: { $exists: true, $ne: [] } // Only count tickets with assignments
+        }
+      },
+      {
+        $unwind: "$assignedTo" // Separate array elements into individual documents
+      },
+      {
+        $group: {
+          _id: "$assignedTo", // Group by employee ID
+          totalTickets: { $sum: 1 }, // Total tickets assigned
+          openTickets: {
+            $sum: { $cond: [{ $eq: ["$status", "Open"] }, 1, 0] }
+          },
+          inProgressTickets: {
+            $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] }
+          },
+          resolvedTickets: {
+            $sum: { $cond: [{ $eq: ["$status", "Resolved"] }, 1, 0] }
+          },
+          closedTickets: {
+            $sum: { $cond: [{ $eq: ["$status", "Closed"] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    // Create a map for quick lookup
+    const ticketCountMap = {};
+    ticketCounts.forEach(item => {
+      ticketCountMap[item._id.toString()] = {
+        total: item.totalTickets,
+        open: item.openTickets,
+        inProgress: item.inProgressTickets,
+        resolved: item.resolvedTickets,
+        closed: item.closedTickets
+      };
+    });
+
+    // Add ticket counts to employee data
+    const employeesWithTickets = employees.map(emp => {
+      const empId = emp._id.toString();
+      const ticketStats = ticketCountMap[empId] || {
+        total: 0,
+        open: 0,
+        inProgress: 0,
+        resolved: 0,
+        closed: 0
+      };
+
+      return {
+        _id: emp._id,
+        name: emp.name,
+        email: emp.email,
+        department: emp.department,
+        status: emp.status,
+        createdAt: emp.createdAt,
+        ticketsHandled: ticketStats.total, // For backward compatibility
+        ticketStats: ticketStats // Detailed breakdown
+      };
+    });
+
+    res.json(employeesWithTickets);
   } catch (err) {
     console.error("❌ Error fetching employees:", err);
     res.status(500).json({ message: "Server error" });

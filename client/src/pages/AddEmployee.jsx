@@ -170,6 +170,7 @@ export default function AddEmployee() {
       showAlert(res.data.message);
       fetchEmployees();
     } catch (err) {
+      console.error("Failed to update status:", err);
       showAlert("Error updating status");
     }
   };
@@ -298,7 +299,7 @@ export default function AddEmployee() {
             ) : (
               <tr>
                 <td colSpan="7" className="text-center py-10 text-gray-500 text-lg italic">
-                  No employees yet. Use the "Add Employee" button to onboard a new team member.
+                  No employees yet. Use the &quot;Add Employee&quot; button to onboard a new team member.
                 </td>
               </tr>
             )}

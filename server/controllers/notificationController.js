@@ -1,7 +1,5 @@
 import nodemailer from "nodemailer";
 import Customer from "../models/Customer.js";
-import Ticket from "../models/Ticket.js";
-import twilio from "twilio";
 import Company from "../models/Company.js";
 
 export const sendEmail = async (req, res) => {
@@ -23,7 +21,7 @@ export const sendEmail = async (req, res) => {
       },
     });
 
-    const mail = await transporter.sendMail({
+     await transporter.sendMail({
       from: `"${company.smtp.fromName || company.companyName}" <${company.smtp.user}>`,
       to,
       subject,

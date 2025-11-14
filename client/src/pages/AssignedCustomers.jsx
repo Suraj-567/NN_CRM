@@ -142,7 +142,7 @@ export default function AssignedCustomers() {
       });
       setSelected(res.data); // Update in background
     } catch (err) {
-      console.warn("Failed to auto-refresh customer details", err);
+      console.error("Failed to auto-refresh customer details", err);
     }
   };
 

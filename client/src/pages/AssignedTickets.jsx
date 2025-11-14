@@ -187,7 +187,7 @@ export default function AssignedTickets() {
       });
       setSelected(res.data); // Update in background
     } catch (err) {
-      console.warn("Failed to auto-refresh ticket details", err);
+      console.error("Failed to auto-refresh ticket details", err);
     }
   };
 
